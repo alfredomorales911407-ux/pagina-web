@@ -1,106 +1,152 @@
-// Configuración del botón de instalación
+// ==========================================================================
+// AgroGuía - Controlador PWA e Instalación en Pantalla
+// ==========================================================================
+
+// Variable para almacenar el evento de instalación
+let deferredPrompt = null;
+
+// Crear el botón flotante de instalación estilizado con el diseño de AgroGuía
 const installButton = document.createElement('button');
 installButton.id = 'pwa-install-button';
-installButton.textContent = 'Instalar App';
+installButton.innerHTML = '📲 <span>Instalar AgroGuía</span>';
 Object.assign(installButton.style, {
   position: 'fixed',
-  bottom: '20px',
+  bottom: '75px',
   right: '20px',
-  padding: '10px 20px',
-  backgroundColor: '#3367D6',
-  color: 'white',
-  border: 'none',
-  borderRadius: '5px',
-  fontSize: '16px',
+  padding: '12px 22px',
+  background: 'linear-gradient(135deg, #1b4332 0%, #2d6a4f 100%)',
+  color: '#ffffff',
+  border: '2px solid #52b788',
+  borderRadius: '50px',
+  fontSize: '15px',
+  fontWeight: '700',
+  fontFamily: "'Outfit', sans-serif",
   cursor: 'pointer',
   display: 'none',
-  zIndex: '1000'
+  zIndex: '9999',
+  boxShadow: '0 8px 24px rgba(16, 185, 129, 0.45)',
+  transition: 'all 0.3s ease',
+  alignItems: 'center',
+  gap: '8px'
 });
-document.body.appendChild(installButton);
 
-// Manejo del evento de instalación
-let deferredPrompt;
+installButton.onmouseover = () => {
+  installButton.style.transform = 'translateY(-3px) scale(1.04)';
+  installButton.style.boxShadow = '0 12px 28px rgba(16, 185, 129, 0.6)';
+};
+installButton.onmouseout = () => {
+  installButton.style.transform = 'none';
+  installButton.style.boxShadow = '0 8px 24px rgba(16, 185, 129, 0.45)';
+};
 
+document.addEventListener('DOMContentLoaded', () => {
+  document.body.appendChild(installButton);
+});
+
+// Captura del evento beforeinstallprompt
 window.addEventListener('beforeinstallprompt', (e) => {
-  console.log('[PWA] Evento beforeinstallprompt recibido');
-  
-  // 1. Prevenir el banner automático
+  console.log('[AgroGuía PWA] Evento de instalación recibido');
   e.preventDefault();
-  
-  // 2. Guardar el evento para usarlo luego
   deferredPrompt = e;
-  
-  // 3. Mostrar NUESTRO botón de instalación
-  installButton.style.display = 'block';
-  
-  // 4. Opcional: Ocultar después de 30 segundos
-  setTimeout(() => {
-    if (installButton.style.display === 'block') {
-      installButton.style.display = 'none';
-    }
-  }, 30000);
-});
 
-// Manejo del clic en nuestro botón
-installButton.addEventListener('click', async () => {
-  if (!deferredPrompt) return;
-  
-  console.log('[PWA] Mostrando diálogo de instalación');
-  
-  try {
-    // Mostrar el prompt de instalación
-    deferredPrompt.prompt();
-    
-    // Esperar a que el usuario decida
-    const { outcome } = await deferredPrompt.userChoice;
-    
-    console.log(`[PWA] Usuario ${outcome === 'accepted' ? 'aceptó' : 'rechazó'} la instalación`);
-    
-    if (outcome === 'accepted') {
-      installButton.textContent = '✓ ¡Instalada!';
-      setTimeout(() => {
-        installButton.style.display = 'none';
-      }, 2000);
-    }
-  } catch (error) {
-    console.error('[PWA] Error al mostrar el prompt:', error);
-  } finally {
-    deferredPrompt = null;
-    installButton.style.display = 'none';
+  // Mostrar el botón de instalación
+  installButton.style.display = 'inline-flex';
+
+  // Si existe un botón de instalación en el header, activarlo
+  const headerInstallBtn = document.getElementById('headerInstallBtn');
+  if (headerInstallBtn) {
+    headerInstallBtn.style.display = 'inline-flex';
   }
 });
 
-// Registro del Service Worker (sin cambios)
+// Función para disparar la instalación
+async function triggerPwaInstall() {
+  if (!deferredPrompt) {
+    alert('Para instalar la aplicación:\n\n• En Chrome/Edge: Haz clic en el icono de instalación ⊕ en la barra de direcciones.\n• En móvil: Toca en el menú (⋮) y selecciona "Instalar aplicación" o "Agregar a pantalla principal".');
+    return;
+  }
+
+  installButton.disabled = true;
+  deferredPrompt.prompt();
+
+  const { outcome } = await deferredPrompt.userChoice;
+  console.log(`[AgroGuía PWA] Respuesta del usuario: ${outcome}`);
+
+  if (outcome === 'accepted') {
+    installButton.innerHTML = '✅ <span>¡Instalando AgroGuía!</span>';
+    setTimeout(() => {
+      installButton.style.display = 'none';
+    }, 2500);
+  }
+
+  deferredPrompt = null;
+  installButton.disabled = false;
+}
+
+installButton.addEventListener('click', triggerPwaInstall);
+
+// Conectar con cualquier botón que tenga la clase .trigger-pwa-install
+document.addEventListener('click', (e) => {
+  if (e.target.closest('.trigger-pwa-install') || e.target.id === 'headerInstallBtn') {
+    triggerPwaInstall();
+  }
+});
+
+// Escuchar cuando la app ya fue instalada
+window.addEventListener('appinstalled', () => {
+  console.log('[AgroGuía PWA] Aplicación instalada con éxito');
+  installButton.style.display = 'none';
+  const headerInstallBtn = document.getElementById('headerInstallBtn');
+  if (headerInstallBtn) {
+    headerInstallBtn.style.display = 'none';
+  }
+});
+
+// Registro del Service Worker
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/instalar/sw.js')
-      .then(registration => {
-        console.log('[PWA] Service Worker registrado con éxito:', registration.scope);
+    // Determinar la ruta relativa correcta al service worker
+    const swPath = window.location.pathname.includes('/instalar/') 
+      ? 'sw.js' 
+      : 'instalar/sw.js';
+
+    navigator.serviceWorker.register(swPath)
+      .then(reg => {
+        console.log('[AgroGuía PWA] Service Worker registrado con éxito. Alcance:', reg.scope);
       })
-      .catch(error => {
-        console.error('[PWA] Error al registrar Service Worker:', error);
+      .catch(err => {
+        console.warn('[AgroGuía PWA] Service Worker no se pudo registrar en modo archivo local (requiere HTTP/HTTPS en producción):', err);
       });
   });
 }
 
-// Detección de iOS (para mostrar instrucciones especiales)
-if (/iPad|iPhone|iPod/.test(navigator.userAgent) || 
-    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) {
+// Detección de iOS (Safari en iPhone/iPad)
+if (/iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream && !navigator.standalone) {
   const iosBanner = document.createElement('div');
+  iosBanner.id = 'pwa-ios-banner';
   iosBanner.innerHTML = `
     <div style="
       position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      padding: 12px;
-      background: #f8f9fa;
-      text-align: center;
-      border-top: 1px solid #ddd;
-      z-index: 999;
+      bottom: 70px;
+      left: 12px;
+      right: 12px;
+      padding: 12px 16px;
+      background: #1b4332;
+      color: #ffffff;
+      border-radius: 12px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      z-index: 9998;
+      border: 1px solid #52b788;
     ">
-      <p style="margin: 0;">📱 Para instalar: Toca <strong>Compartir</strong> → <strong>Añadir a Inicio</strong></p>
+      <span>📲 <strong>Instalar AgroGuía:</strong> Toca <span style="font-size: 16px;">⎋ Compartir</span> y luego <strong>"Añadir a pantalla de inicio"</strong>.</span>
+      <button onclick="document.getElementById('pwa-ios-banner').remove()" style="background:none; border:none; color:#fff; font-size:16px; margin-left:8px; cursor:pointer;">✕</button>
     </div>
   `;
-  document.body.appendChild(iosBanner);
+  window.addEventListener('load', () => {
+    document.body.appendChild(iosBanner);
+  });
 }
